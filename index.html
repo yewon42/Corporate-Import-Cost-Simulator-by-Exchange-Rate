@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>환율에 따른 기업의 수입 비용 시뮬레이터</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+        input[type="range"] {
+            accent-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- 헤더 영역 -->
+        <header class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2 text-blue-600 text-sm font-semibold mb-1">
+                    <i data-lucide="line-chart" class="w-4 h-4"></i>
+                    <span>재무 & 외환 리스크 관리 솔루션</span>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900">환율에 따른 기업의 수입 비용 시뮬레이터</h1>
+                <p class="text-slate-500 text-sm mt-1">
+                    환율 변동에 따른 총비용 $Cost(x) = ax + b$ 및 손익분기점(BEP) 환율을 실시간 산출합니다.
+                </p>
+            </div>
+            
+            <!-- 시나리오 Quick Presets -->
+            <div class="flex flex-wrap gap-2 items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs">
+                <span class="text-slate-500 font-medium px-2">시나리오 프리셋:</span>
+                <button onclick="applyPreset('standard')" class="px-3 py-1.5 rounded-lg bg-white shadow-xs font-semibold text-slate-700 hover:bg-slate-50 border border-slate-200 transition">기본 설정</button>
+                <button onclick="applyPreset('highExchange')" class="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-semibold hover:bg-red-100 border border-red-200 transition">⚠️ 고환율 위기</button>
+                <button onclick="applyPreset('highCost')" class="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100 border border-amber-200 transition">🚢 물류비 상승</button>
+            </div>
+        </header>
+
+        <!-- 메인 그리드 레이아웃 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- 왼쪽: 컨트롤 패널 (5 columns) -->
+            <div class="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h2 class="font-bold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="sliders" class="w-5 h-5 text-blue-600"></i>
+                        입력 변수 설정
+                    </h2>
+                    <span class="text-xs text-blue-600 font-medium bg-blue-50 px-2.5 py-1 rounded-full">실시간 연동</span>
+                </div>
+
+                <!-- 1. 현재 환율 (x) -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-semibold">
+                        <label for="slider-exchangeRate" class="text-slate-700 flex items-center gap-1.5">
+                            현재 원/달러 환율 ($x$)
+                        </label>
+                        <span id="val-exchangeRate" class="text-blue-600 font-bold">1,350 원</span>
+                    </div>
+                    <input type="range" id="slider-exchangeRate" min="1100" max="1700" step="5" value="1350" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-400">
+                        <span>1,100원</span>
+                        <span>1,400원</span>
+                        <span>1,700원</span>
+                    </div>
+                </div>
+
+                <!-- 2. 외화 결제 대금 (a) -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-semibold">
+                        <label for="slider-importAmount" class="text-slate-700">수입 결제 대금 ($a$)</label>
+                        <span id="val-importAmount" class="text-blue-600 font-bold">$50,000</span>
+                    </div>
+                    <input type="range" id="slider-importAmount" min="5000" max="300000" step="5000" value="50000" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- 3. 고정 부대비용 (b) -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-semibold">
+                        <label for="slider-fixedCost" class="text-slate-700">고정 부대비용 (관세/물류비/운송) ($b$)</label>
+                        <span id="val-fixedCost" class="text-blue-600 font-bold">15,000,000 원</span>
+                    </div>
+                    <input type="range" id="slider-fixedCost" min="1000000" max="60000000" step="1000000" value="15000000" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- 4. 총 판매 수량 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-semibold">
+                        <label for="slider-quantity" class="text-slate-700">수입 상품 총 판매 수량</label>
+                        <span id="val-quantity" class="text-blue-600 font-bold">1,000 개</span>
+                    </div>
+                    <input type="range" id="slider-quantity" min="100" max="10000" step="100" value="1000" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- 5. 개당 판매가 -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-semibold">
+                        <label for="slider-unitPrice" class="text-slate-700">개당 국내 판매가 (원화)</label>
+                        <span id="val-unitPrice" class="text-blue-600 font-bold">95,000 원</span>
+                    </div>
+                    <input type="range" id="slider-unitPrice" min="10000" max="500000" step="1000" value="95000" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- 수학적 모델 공식 박스 -->
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs text-slate-600">
+                    <div class="font-bold text-slate-800 flex items-center gap-1">
+                        <i data-lucide="calculator" class="w-3.5 h-3.5 text-blue-600"></i>
+                        일차함수 비용 모델 공식
+                    </div>
+                    <div>• 총비용: $Cost(x) = a \cdot x + b$</div>
+                    <div>• 손익분기 환율: $x_{BEP} = \frac{\text{총매출} - b}{a}$</div>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 시각화 및 리포트 패널 (7 columns) -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- KPI 카드 4종 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                        <span class="text-xs text-slate-500 font-medium block">총비용 (Cost)</span>
+                        <span id="kpi-totalCost" class="text-base md:text-lg font-bold text-slate-900 block mt-1">0 원</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                        <span class="text-xs text-slate-500 font-medium block">총예상매출 (Revenue)</span>
+                        <span id="kpi-totalRevenue" class="text-base md:text-lg font-bold text-slate-900 block mt-1">0 원</span>
+                    </div>
+                    <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-200 shadow-xs">
+                        <span class="text-xs text-amber-700 font-medium block">손익분기 환율 (BEP)</span>
+                        <span id="kpi-bepRate" class="text-base md:text-lg font-bold text-amber-900 block mt-1">0 원</span>
+                    </div>
+                    <div id="kpi-margin-card" class="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 shadow-xs transition-colors">
+                        <span class="text-xs text-emerald-700 font-medium block">예상 영업이익</span>
+                        <span id="kpi-netProfit" class="text-base md:text-lg font-bold text-emerald-900 block mt-1">0 원</span>
+                    </div>
+                </div>
+
+                <!-- 차트 영역 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-slate-900 flex items-center gap-2 text-sm md:text-base">
+                            <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i>
+                            환율 변동에 따른 비용 vs 매출 곡선
+                        </h3>
+                        <span class="text-xs text-slate-400">교차점 = BEP 환율</span>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="bepChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 민감도 분석 테이블 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-3">
+                    <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <i data-lucide="table" class="w-4 h-4 text-blue-600"></i>
+                        환율 변동 시나리오별 민감도 표 (Sensitivity Table)
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">구분</th>
+                                    <th class="p-2.5">-50원 강세</th>
+                                    <th class="p-2.5 bg-blue-50/50 text-blue-700 font-bold">현재 환율</th>
+                                    <th class="p-2.5">+50원 약세</th>
+                                    <th class="p-2.5">+100원 급등</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sensitivity-tbody" class="divide-y divide-slate-100">
+                                <!-- JS 동적 생성 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- AI 리스크 분석 리포트 -->
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50/40 rounded-2xl p-6 border border-blue-200/80 space-y-3">
+                    <div class="flex items-center gap-2 text-blue-900 font-bold text-sm">
+                        <i data-lucide="bot" class="w-5 h-5 text-blue-600"></i>
+                        AI 실시간 경영 리스크 진단 리포트
+                    </div>
+                    <div id="analysis-content" class="text-sm text-blue-950 leading-relaxed">
+                        계산 중입니다...
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const sliders = {
+            exchangeRate: document.getElementById('slider-exchangeRate'),
+            importAmount: document.getElementById('slider-importAmount'),
+            fixedCost: document.getElementById('slider-fixedCost'),
+            quantity: document.getElementById('slider-quantity'),
+            unitPrice: document.getElementById('slider-unitPrice')
+        };
+
+        const labels = {
+            exchangeRate: document.getElementById('val-exchangeRate'),
+            importAmount: document.getElementById('val-importAmount'),
+            fixedCost: document.getElementById('val-fixedCost'),
+            quantity: document.getElementById('val-quantity'),
+            unitPrice: document.getElementById('val-unitPrice')
+        };
+
+        const kpis = {
+            totalCost: document.getElementById('kpi-totalCost'),
+            totalRevenue: document.getElementById('kpi-totalRevenue'),
+            bepRate: document.getElementById('kpi-bepRate'),
+            netProfit: document.getElementById('kpi-netProfit'),
+            marginCard: document.getElementById('kpi-margin-card')
+        };
+
+        const analysisContent = document.getElementById('analysis-content');
+        const sensitivityTbody = document.getElementById('sensitivity-tbody');
+
+        // Formatter Helper
+        function formatKRW(num) {
+            return new Intl.NumberFormat('ko-KR').format(Math.round(num)) + ' 원';
+        }
+        function formatUSD(num) {
+            return '$' + new Intl.NumberFormat('en-US').format(Math.round(num));
+        }
+
+        // Chart.js Setup
+        const ctx = document.getElementById('bepChart').getContext('2d');
+        let chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: '총비용 Cost(x)',
+                        data: [],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0
+                    },
+                    {
+                        label: '총매출 Revenue',
+                        data: [],
+                        borderColor: '#10b981',
+                        borderWidth: 2,
+                        borderDash: [4, 4],
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        grid: { color: '#f1f5f9' },
+                        title: { display: true, text: '원/달러 환율 (KRW/USD)', font: { size: 11 } }
+                    },
+                    y: {
+                        grid: { color: '#f1f5f9' },
+                        ticks: {
+                            callback: function(val) {
+                                return (val / 10000).toLocaleString() + '만원';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.dataset.label + ': ' + formatKRW(ctx.raw);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Core Calculation & UI Update
+        function updateAll() {
+            const x = parseFloat(sliders.exchangeRate.value);
+            const a = parseFloat(sliders.importAmount.value);
+            const b = parseFloat(sliders.fixedCost.value);
+            const qty = parseFloat(sliders.quantity.value);
+            const price = parseFloat(sliders.unitPrice.value);
+
+            // 1. Text Labels
+            labels.exchangeRate.textContent = formatKRW(x);
+            labels.importAmount.textContent = formatUSD(a);
+            labels.fixedCost.textContent = formatKRW(b);
+            labels.quantity.textContent = new Intl.NumberFormat('ko-KR').format(qty) + ' 개';
+            labels.unitPrice.textContent = formatKRW(price);
+
+            // 2. Math Calculations
+            const totalCost = (a * x) + b;
+            const totalRevenue = qty * price;
+            const netProfit = totalRevenue - totalCost;
+            
+            let bepRate = 0;
+            if (a > 0) {
+                bepRate = (totalRevenue - b) / a;
+            }
+
+            // 3. KPI Cards
+            kpis.totalCost.textContent = formatKRW(totalCost);
+            kpis.totalRevenue.textContent = formatKRW(totalRevenue);
+            kpis.bepRate.textContent = bepRate > 0 ? formatKRW(bepRate) : '산출 불가';
+            kpis.netProfit.textContent = formatKRW(netProfit);
+
+            // Profit / Loss Style Switch
+            if (netProfit >= 0) {
+                kpis.marginCard.className = 'bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 shadow-xs';
+                kpis.marginCard.querySelector('span:first-child').className = 'text-xs text-emerald-700 font-medium block';
+                kpis.netProfit.className = 'text-base md:text-lg font-bold text-emerald-900 block mt-1';
+            } else {
+                kpis.marginCard.className = 'bg-rose-50/50 p-4 rounded-xl border border-rose-200 shadow-xs';
+                kpis.marginCard.querySelector('span:first-child').className = 'text-xs text-rose-700 font-medium block';
+                kpis.netProfit.className = 'text-base md:text-lg font-bold text-rose-900 block mt-1';
+            }
+
+            // 4. Update Chart
+            const chartLabels = [];
+            const costData = [];
+            const revenueData = [];
+
+            const minX = Math.max(900, Math.floor(x - 200));
+            const maxX = Math.min(2000, Math.ceil(x + 200));
+
+            for (let r = minX; r <= maxX; r += 10) {
+                chartLabels.push(r);
+                costData.push((a * r) + b);
+                revenueData.push(totalRevenue);
+            }
+
+            chart.data.labels = chartLabels;
+            chart.data.datasets[0].data = costData;
+            chart.data.datasets[1].data = revenueData;
+            chart.update('none');
+
+            // 5. Sensitivity Table Update
+            updateSensitivityTable(x, a, b, totalRevenue);
+
+            // 6. Generate AI Report
+            generateReport(x, bepRate, netProfit, totalRevenue, a, b, qty);
+        }
+
+        // Sensitivity Matrix Generator
+        function updateSensitivityTable(currentX, a, b, totalRevenue) {
+            const rates = [currentX - 50, currentX, currentX + 50, currentX + 100];
+            
+            let rowRate = `<tr class="font-medium text-slate-700"><td class="p-2.5 text-slate-500">예상 환율</td>`;
+            let rowCost = `<tr class="text-slate-600"><td class="p-2.5 text-slate-500">총비용</td>`;
+            let rowProfit = `<tr class="font-bold"><td class="p-2.5 text-slate-500">영업이익</td>`;
+
+            rates.forEach(r => {
+                const cost = (a * r) + b;
+                const profit = totalRevenue - cost;
+                const isCurrent = (r === currentX);
+                const bgClass = isCurrent ? 'bg-blue-50/40' : '';
+
+                rowRate += `<td class="p-2.5 ${bgClass}">${formatKRW(r)}</td>`;
+                rowCost += `<td class="p-2.5 ${bgClass}">${formatKRW(cost)}</td>`;
+                
+                const profitColor = profit >= 0 ? 'text-emerald-600' : 'text-rose-600';
+                rowProfit += `<td class="p-2.5 ${profitColor} ${bgClass}">${formatKRW(profit)}</td>`;
+            });
+
+            rowRate += `</tr>`;
+            rowCost += `</tr>`;
+            rowProfit += `</tr>`;
+
+            sensitivityTbody.innerHTML = rowRate + rowCost + rowProfit;
+        }
+
+        // AI Risk Analysis Report
+        function generateReport(currentX, bepRate, netProfit, totalRevenue, a, b, qty) {
+            let html = '';
+
+            if (bepRate <= 0) {
+                html = `<p class="font-semibold text-rose-700">🚨 [구조적 적자 경고]</p>
+                        <p class="mt-1">현재 설정된 판매 가격으로는 고정 부대비용(${formatKRW(b)})조차 회수하지 못해 환율 변동과 무관하게 적자가 지속됩니다. 판매 단가 인상 및 물류비 절감 재협상이 필요합니다.</p>`;
+            } else {
+                const diffRate = bepRate - currentX;
+                const marginRate = ((netProfit / totalRevenue) * 100).toFixed(1);
+
+                if (netProfit > 0) {
+                    html = `<p class="font-semibold text-emerald-800">✅ [안정적 흑자 구간]</p>
+                            <p class="mt-1">현재 환율(<b>${formatKRW(currentX)}</b>) 적용 시 예상 영업이익은 <b>${formatKRW(netProfit)}</b> (마진율 약 <b>${marginRate}%</b>)입니다.</p>
+                            <p class="mt-1.5 text-slate-700">• <b>손익분기점 마지노선:</b> <b>${formatKRW(bepRate)}</b><br>
+                            • 환율이 앞으로 <b>+${formatKRW(diffRate)}</b>까지 상승하더라도 손실을 방지할 수 있습니다.</p>`;
+                } else if (netProfit === 0) {
+                    html = `<p class="font-semibold text-amber-800">⚖️ [손익분기점(BEP) 도달]</p>
+                            <p class="mt-1">현재 환율이 정확히 BEP 환율(<b>${formatKRW(bepRate)}</b>)에 위치해 있습니다. 추가적인 환율 상승은 즉시 영업 적자로 직결되므로 선물환(환헤지)계약 체결을 권장합니다.</p>`;
+                } else {
+                    const lossAmount = Math.abs(netProfit);
+                    const recUnitPrice = Math.ceil(((a * currentX) + b) / qty);
+
+                    html = `<p class="font-semibold text-rose-700">⚠️ [환차손 영업적자 발생]</p>
+                            <p class="mt-1">현재 환율(<b>${formatKRW(currentX)}</b>)이 손익분기 환율(<b>${formatKRW(bepRate)}</b>)을 초과하여 건당 약 <b class="text-rose-600">${formatKRW(lossAmount)}</b>의 적자가 발생하고 있습니다.</p>
+                            <div class="mt-2.5 p-3 bg-white/80 rounded-lg border border-rose-200 text-xs text-slate-800">
+                                <b>💡 경영 전략 제언:</b><br>
+                                1. 손실을 보전하기 위한 минимальный 개당 판매가는 <b>${formatKRW(recUnitPrice)}</b> 이상으로 재설정되어야 합니다.<br>
+                                2. 수입 시기 연기 또는 통화선물 헤지 전략 수립이 시급합니다.
+                            </div>`;
+                }
+            }
+
+            analysisContent.innerHTML = html;
+        }
+
+        // Scenario Presets
+        function applyPreset(type) {
+            if (type === 'standard') {
+                sliders.exchangeRate.value = 1350;
+                sliders.importAmount.value = 50000;
+                sliders.fixedCost.value = 15000000;
+                sliders.quantity.value = 1000;
+                sliders.unitPrice.value = 95000;
+            } else if (type === 'highExchange') {
+                sliders.exchangeRate.value = 1480;
+                sliders.importAmount.value = 80000;
+                sliders.fixedCost.value = 20000000;
+                sliders.quantity.value = 1200;
+                sliders.unitPrice.value = 110000;
+            } else if (type === 'highCost') {
+                sliders.exchangeRate.value = 1380;
+                sliders.importAmount.value = 40000;
+                sliders.fixedCost.value = 35000000;
+                sliders.quantity.value = 800;
+                sliders.unitPrice.value = 98000;
+            }
+            updateAll();
+        }
+
+        // Event Listeners
+        Object.values(sliders).forEach(slider => {
+            slider.addEventListener('input', updateAll);
+        });
+
+        // Initialize icons & App
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            updateAll();
+        });
+    </script>
+</body>
+</html>
